@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+  MANAGER
+}
+
+enum FacilityType {
+  CLASSROOM
+  LAB
+  SPORTS
+}
+
+enum BookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED
+  CHECKED_IN
+  NO_SHOW
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(STUDENT)
+  createdAt DateTime @default(now())
+
+  bookings  Booking[]
+  approvals Booking[] @relation("Approver")
+}
+
+model Facility {
+  id          Int          @id @default(autoincrement())
+  name        String
+  type        FacilityType
+  location    String
+  capacity    Int
+  description String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+
+  slots    Slot[]
+  bookings Booking[]
+}
+
+model Slot {
+  id         Int      @id @default(autoincrement())
+  facilityId Int
+  startTime  DateTime
+  endTime    DateTime
+  status     String   @default("AVAILABLE")
+  createdAt  DateTime @default(now())
+
+  facility Facility @relation(fields: [facilityId], references: [id])
+  booking  Booking?
+}
+
+model Booking {
+  id         Int           @id @default(autoincrement())
+  userId     Int
+  facilityId Int
+  slotId     Int           @unique
+  purpose    String?
+  status     BookingStatus @default(PENDING)
+  qrToken    String?       @unique
+  approvedBy Int?
+  approvedAt DateTime?
+  createdAt  DateTime      @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  facility Facility @relation(fields: [facilityId], references: [id])
+  slot     Slot     @relation(fields: [slotId], references: [id])
+
+  approver User?     @relation("Approver", fields: [approvedBy], references: [id])
+  checkins CheckIn[]
+}
+
+model CheckIn {
+  id          Int      @id @default(autoincrement())
+  bookingId   Int
+  checkinTime DateTime @default(now())
+  method      String   @default("QR")
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+}
