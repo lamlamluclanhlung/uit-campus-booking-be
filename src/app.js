@@ -4,9 +4,8 @@ const authRoutes = require("./routes/auth.routes");
 
 const app = express();
 
-//thả cửa CORS để khỏi lỗi port
-app.use(cors());
-app.use(express.json());
+app.use(cors());           // Day 1 mở CORS cho dev
+app.use(express.json());   // parse JSON body
 
 app.use("/auth", authRoutes);
 
@@ -15,3 +14,4 @@ app.get("/", (req, res) => {
 });
 
 module.exports = app;
+
