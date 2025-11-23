@@ -1,18 +1,18 @@
 const router = require("express").Router();
-const auth = require("../middlewares/auth.middleware");
+const { requireAuth } = require("../middlewares/auth.middleware");
 const {
   createBooking,
   getMyBookings,
-  cancelBooking
+  cancelBooking,
 } = require("../controllers/booking.controller");
 
 // Student tạo booking
-router.post("/", auth, createBooking);
+router.post("/", requireAuth, createBooking);
 
 // Student xem booking của mình
-router.get("/me", auth, getMyBookings);
+router.get("/me", requireAuth, getMyBookings);
 
 // Student hủy booking
-router.delete("/:id", auth, cancelBooking);
+router.delete("/:id", requireAuth, cancelBooking);
 
 module.exports = router;
