@@ -8,7 +8,6 @@ const {
   rejectBooking
 } = require("../controllers/admin.controller");
 
-// Admin xem pending
 router.get(
   "/bookings/pending",
   auth,
@@ -16,7 +15,6 @@ router.get(
   getPendingBookings
 );
 
-// Admin approve
 router.put(
   "/bookings/:id/approve",
   auth,
@@ -24,7 +22,6 @@ router.put(
   approveBooking
 );
 
-// Admin reject
 router.put(
   "/bookings/:id/reject",
   auth,

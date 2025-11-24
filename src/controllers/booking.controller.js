@@ -130,5 +130,6 @@ async function cancelBooking(req, res) {
 module.exports = {
   createBooking,
   getMyBookings,
-  cancelBooking,
+  cancelBooking
 };
+
