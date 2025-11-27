@@ -7,33 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  STUDENT
-  ADMIN
-  MANAGER
-}
-
-enum FacilityType {
-  CLASSROOM
-  LAB
-  SPORTS
-}
-
-enum BookingStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  CANCELED
-  CHECKED_IN
-  NO_SHOW
-}
-
 model User {
   id        Int      @id @default(autoincrement())
   name      String
   email     String   @unique
   password  String
-  role      Role     @default(STUDENT)
+  role      String   @default("STUDENT") // thay cho Role enum
   createdAt DateTime @default(now())
 
   bookings  Booking[]
@@ -41,14 +20,14 @@ model User {
 }
 
 model Facility {
-  id          Int          @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   name        String
-  type        FacilityType
+  type        String // thay cho FacilityType enum
   location    String
   capacity    Int
   description String?
-  isActive    Boolean      @default(true)
-  createdAt   DateTime     @default(now())
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
 
   slots    Slot[]
   bookings Booking[]
@@ -67,16 +46,16 @@ model Slot {
 }
 
 model Booking {
-  id         Int           @id @default(autoincrement())
+  id         Int       @id @default(autoincrement())
   userId     Int
   facilityId Int
-  slotId     Int           @unique
+  slotId     Int       @unique
   purpose    String?
-  status     BookingStatus @default(PENDING)
-  qrToken    String?       @unique
+  status     String    @default("PENDING") // thay cho BookingStatus enum
+  qrToken    String?   @unique
   approvedBy Int?
   approvedAt DateTime?
-  createdAt  DateTime      @default(now())
+  createdAt  DateTime  @default(now())
 
   user     User     @relation(fields: [userId], references: [id])
   facility Facility @relation(fields: [facilityId], references: [id])

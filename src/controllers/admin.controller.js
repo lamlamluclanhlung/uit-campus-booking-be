@@ -1,90 +1,126 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require("../prismaClient");
 
-const genQrToken = () =>
-  "QR-" + Math.random().toString(36).slice(2) + Date.now();
-
-/**
- * GET /admin/bookings/pending
- */
+// GET /admin/bookings/pending
 async function getPendingBookings(req, res) {
   try {
-    const list = await prisma.booking.findMany({
+    const bookings = await prisma.booking.findMany({
       where: { status: "PENDING" },
-      orderBy: { createdAt: "asc" },
       include: {
-        user: { select: { id: true, name: true, email: true } },
+        user: true,
         facility: true,
         slot: true
-      }
+      },
+      orderBy: { createdAt: "asc" }
     });
-    res.json(list);
+
+    return res.json(bookings);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Get pending bookings failed" });
+    console.error("Get pending bookings error:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
-/**
- * PUT /admin/bookings/:id/approve
- * set APPROVED + generate qrToken
- */
+// PUT /admin/bookings/:id/approve
 async function approveBooking(req, res) {
   try {
     const id = Number(req.params.id);
 
-    const booking = await prisma.booking.findUnique({ where: { id } });
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
-    if (booking.status !== "PENDING")
-      return res.status(400).json({ message: "Only PENDING can be approved" });
-
-    const updated = await prisma.booking.update({
+    const booking = await prisma.booking.update({
       where: { id },
       data: {
         status: "APPROVED",
-        qrToken: genQrToken()
+        approvedBy: req.user.id,
+        approvedAt: new Date()
       },
-      include: { user: true, facility: true, slot: true }
+      include: {
+        user: true,
+        facility: true,
+        slot: true
+      }
     });
 
-    res.json(updated);
+    // Option: update slot.status = BOOKED
+    try {
+      await prisma.slot.update({
+        where: { id: booking.slotId },
+        data: { status: "BOOKED" }
+      });
+    } catch (e) {
+      console.warn("Update slot status failed (optional):", e.message);
+    }
+
+    return res.json(booking);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Approve booking failed" });
+    console.error("Approve booking error:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
-/**
- * PUT /admin/bookings/:id/reject
- * HARD delete booking + slot AVAILABLE
- * (vì slotId @unique nên giữ record sẽ block rebook)
- */
+// PUT /admin/bookings/:id/reject
 async function rejectBooking(req, res) {
   try {
     const id = Number(req.params.id);
 
-    const booking = await prisma.booking.findUnique({ where: { id } });
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
-    if (booking.status !== "PENDING")
-      return res.status(400).json({ message: "Only PENDING can be rejected" });
-
-    await prisma.$transaction(async (tx) => {
-      await tx.booking.delete({ where: { id } });
-      await tx.slot.update({
-        where: { id: booking.slotId },
-        data: { status: "AVAILABLE" }
-      });
+    const booking = await prisma.booking.update({
+      where: { id },
+      data: {
+        status: "REJECTED",
+        approvedBy: req.user.id,
+        approvedAt: new Date()
+      },
+      include: {
+        user: true,
+        facility: true,
+        slot: true
+      }
     });
 
-    res.json({ message: "Rejected and freed slot" });
+    return res.json(booking);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Reject booking failed" });
+    console.error("Reject booking error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+// GET /reports/summary
+async function getSummaryReport(req, res) {
+  try {
+    const [
+      totalUsers,
+      totalFacilities,
+      totalBookings,
+      pending,
+      approved,
+      rejected,
+      canceled
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.facility.count(),
+      prisma.booking.count(),
+      prisma.booking.count({ where: { status: "PENDING" } }),
+      prisma.booking.count({ where: { status: "APPROVED" } }),
+      prisma.booking.count({ where: { status: "REJECTED" } }),
+      prisma.booking.count({ where: { status: "CANCELED" } })
+    ]);
+
+    return res.json({
+      totalUsers,
+      totalFacilities,
+      totalBookings,
+      pending,
+      approved,
+      rejected,
+      canceled
+    });
+  } catch (err) {
+    console.error("Summary report error:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
 module.exports = {
   getPendingBookings,
   approveBooking,
-  rejectBooking
+  rejectBooking,
+  getSummaryReport
 };

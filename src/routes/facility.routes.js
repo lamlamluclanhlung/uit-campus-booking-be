@@ -1,17 +1,16 @@
-const router = require("express").Router();
+const express = require("express");
 const {
-  listFacilities,
-  getFacilityDetail,
-  listSlotsByFacilityAndDate
+  getFacilities,
+  getFacilityById,
+  getSlotsByFacility,
 } = require("../controllers/facility.controller");
+const { authMiddleware } = require("../middlewares/auth.middleware");
 
-// GET /facilities
-router.get("/", listFacilities);
+const router = express.Router();
 
-// GET /facilities/:id
-router.get("/:id", getFacilityDetail);
-
-// GET /facilities/:id/slots?date=YYYY-MM-DD
-router.get("/:id/slots", listSlotsByFacilityAndDate);
+// order quan trọng: route /:id/slots phải đặt TRƯỚC /:id
+router.get("/", authMiddleware, getFacilities);
+router.get("/:id/slots", authMiddleware, getSlotsByFacility);
+router.get("/:id", authMiddleware, getFacilityById);
 
 module.exports = router;

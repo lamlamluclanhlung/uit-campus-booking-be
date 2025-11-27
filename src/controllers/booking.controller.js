@@ -1,129 +1,108 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const { v4: uuidv4 } = require("uuid");
+const prisma = require("../prismaClient");
 
-/**
- * POST /bookings
- * body: { slotId, facilityId, purpose? }
- */
+// POST /bookings
 async function createBooking(req, res) {
   try {
-    const userId = req.user.id; // auth.middleware đã gán
-    const { slotId, facilityId, purpose } = req.body;
+    const { facilityId, slotId, purpose } = req.body;
 
-    if (!slotId || !facilityId) {
+    if (!facilityId || !slotId) {
       return res
         .status(400)
-        .json({ message: "slotId and facilityId are required" });
+        .json({ message: "Missing facilityId or slotId" });
     }
 
-    // 1) check slot tồn tại + thuộc facility
     const slot = await prisma.slot.findUnique({
       where: { id: Number(slotId) },
-      include: { facility: true },
+      include: { facility: true }
     });
 
-    if (!slot) {
-      return res.status(404).json({ message: "Slot not found" });
+    if (!slot || slot.facilityId !== Number(facilityId)) {
+      return res.status(400).json({ message: "Invalid slot" });
     }
-    if (slot.facilityId !== Number(facilityId)) {
+
+    // Slot đã có booking APPROVED?
+    const existingApproved = await prisma.booking.findFirst({
+      where: {
+        slotId: Number(slotId),
+        status: "APPROVED"
+      }
+    });
+
+    if (existingApproved) {
       return res
         .status(400)
-        .json({ message: "Slot does not belong to this facility" });
-    }
-    if (slot.status !== "AVAILABLE") {
-      return res.status(400).json({ message: "Slot is not available" });
+        .json({ message: "This slot has already been approved for another booking" });
     }
 
-    // 2) anti double booking (DB-level unique slotId)
-    const booking = await prisma.$transaction(async (tx) => {
-      const b = await tx.booking.create({
-        data: {
-          userId,
-          facilityId: Number(facilityId),
-          slotId: Number(slotId),
-          purpose: purpose || null,
-          status: "PENDING",
-        },
-        include: {
-          facility: true,
-          slot: true,
-        },
-      });
+    const qrToken = uuidv4();
 
-      await tx.slot.update({
-        where: { id: Number(slotId) },
-        data: { status: "BOOKED" },
-      });
-
-      return b;
+    const booking = await prisma.booking.create({
+      data: {
+        userId: req.user.id,
+        facilityId: Number(facilityId),
+        slotId: Number(slotId),
+        purpose: purpose || "",
+        status: "PENDING",
+        qrToken
+      },
+      include: {
+        facility: true,
+        slot: true
+      }
     });
 
     return res.status(201).json(booking);
   } catch (err) {
-    if (err.code === "P2002") {
-      return res.status(409).json({ message: "Slot already booked" });
-    }
-    console.error(err);
-    return res.status(500).json({ message: "Create booking failed" });
+    console.error("Create booking error:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
-/**
- * GET /bookings/me
- */
+// GET /bookings/me
 async function getMyBookings(req, res) {
   try {
-    const userId = req.user.id;
-
     const bookings = await prisma.booking.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
+      where: { userId: req.user.id },
       include: {
         facility: true,
-        slot: true,
+        slot: true
       },
+      orderBy: { createdAt: "desc" }
     });
 
-    res.json(bookings);
+    return res.json(bookings);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Get my bookings failed" });
+    console.error("Get my bookings error:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
-/**
- * DELETE /bookings/:id
- * hard delete + trả slot về AVAILABLE
- */
+// DELETE /bookings/:id
 async function cancelBooking(req, res) {
   try {
-    const userId = req.user.id;
-    const bookingId = Number(req.params.id);
+    const id = Number(req.params.id);
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-    });
-
-    if (!booking) {
+    const booking = await prisma.booking.findUnique({ where: { id } });
+    if (!booking || booking.userId !== req.user.id) {
       return res.status(404).json({ message: "Booking not found" });
     }
 
-    if (booking.userId !== userId) {
-      return res.status(403).json({ message: "Not allowed" });
+    if (booking.status === "APPROVED") {
+      return res
+        .status(400)
+        .json({ message: "Cannot cancel an approved booking" });
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.booking.delete({ where: { id: bookingId } });
-      await tx.slot.update({
-        where: { id: booking.slotId },
-        data: { status: "AVAILABLE" },
-      });
+    const updated = await prisma.booking.update({
+      where: { id },
+      data: { status: "CANCELED" } // đúng enum trong schema
     });
 
-    res.json({ message: "Booking canceled" });
+    return res.json({ message: "Booking canceled", booking: updated });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Cancel booking failed" });
+    console.error("Cancel booking error:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -132,4 +111,3 @@ module.exports = {
   getMyBookings,
   cancelBooking
 };
-

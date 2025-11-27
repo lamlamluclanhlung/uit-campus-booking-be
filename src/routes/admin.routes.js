@@ -1,31 +1,33 @@
-const router = require("express").Router();
-const auth = require("../middlewares/auth.middleware");
-const requireRole = require("../middlewares/role.middleware");
-
+const express = require("express");
 const {
   getPendingBookings,
   approveBooking,
-  rejectBooking
+  rejectBooking,
 } = require("../controllers/admin.controller");
+const { authMiddleware } = require("../middlewares/auth.middleware");
+const { requireAdmin } = require("../middlewares/role.middleware");
 
+const router = express.Router();
+
+// /admin/bookings/...
 router.get(
   "/bookings/pending",
-  auth,
-  requireRole(["ADMIN", "MANAGER"]),
+  authMiddleware,
+  requireAdmin,
   getPendingBookings
 );
 
 router.put(
   "/bookings/:id/approve",
-  auth,
-  requireRole(["ADMIN", "MANAGER"]),
+  authMiddleware,
+  requireAdmin,
   approveBooking
 );
 
 router.put(
   "/bookings/:id/reject",
-  auth,
-  requireRole(["ADMIN", "MANAGER"]),
+  authMiddleware,
+  requireAdmin,
   rejectBooking
 );
 

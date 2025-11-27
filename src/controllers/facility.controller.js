@@ -1,57 +1,65 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require("../prismaClient");
 
 // GET /facilities
-async function listFacilities(req, res) {
-  const facilities = await prisma.facility.findMany({
-    where: { isActive: true },
-    orderBy: { id: "asc" }
-  });
-  res.json(facilities);
+async function getFacilities(req, res) {
+  try {
+    const facilities = await prisma.facility.findMany({
+      orderBy: { name: "asc" }
+    });
+    return res.json(facilities);
+  } catch (err) {
+    console.error("Get facilities error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
 }
 
 // GET /facilities/:id
-async function getFacilityDetail(req, res) {
-  const id = Number(req.params.id);
-  const facility = await prisma.facility.findUnique({ where: { id } });
+async function getFacilityById(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const facility = await prisma.facility.findUnique({
+      where: { id }
+    });
 
-  if (!facility) {
-    return res.status(404).json({ message: "Facility not found" });
+    if (!facility) {
+      return res.status(404).json({ message: "Facility not found" });
+    }
+
+    return res.json(facility);
+  } catch (err) {
+    console.error("Get facility by id error:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
-  res.json(facility);
 }
 
 // GET /facilities/:id/slots?date=YYYY-MM-DD
-async function listSlotsByFacilityAndDate(req, res) {
-  const facilityId = Number(req.params.id);
-  const dateStr = req.query.date; // optional
+async function getSlotsByFacility(req, res) {
+  try {
+    const facilityId = Number(req.params.id);
+    const { date } = req.query;
 
-  let start, end;
+    const where = { facilityId };
 
-  if (dateStr) {
-    // lọc theo 1 ngày cụ thể
-    start = new Date(dateStr + "T00:00:00.000Z");
-    end   = new Date(dateStr + "T23:59:59.999Z");
-  } else {
-    // không truyền date => lấy 3 ngày tới
-    start = new Date();
-    end = new Date();
-    end.setDate(end.getDate() + 3);
+    if (date) {
+      const dayStart = new Date(date + "T00:00:00.000Z");
+      const dayEnd = new Date(date + "T23:59:59.999Z");
+      where.startTime = { gte: dayStart, lte: dayEnd };
+    }
+
+    const slots = await prisma.slot.findMany({
+      where,
+      orderBy: { startTime: "asc" }
+    });
+
+    return res.json(slots);
+  } catch (err) {
+    console.error("Get slots by facility error:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
-
-  const slots = await prisma.slot.findMany({
-    where: {
-      facilityId,
-      startTime: { gte: start, lte: end }
-    },
-    orderBy: { startTime: "asc" }
-  });
-
-  res.json(slots);
 }
 
 module.exports = {
-  listFacilities,
-  getFacilityDetail,
-  listSlotsByFacilityAndDate
+  getFacilities,
+  getFacilityById,
+  getSlotsByFacility
 };

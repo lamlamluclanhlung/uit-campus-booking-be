@@ -1,10 +1,11 @@
-function requireRole(roles = []) {
-  return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    next();
-  };
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== "ADMIN") {
+    return res.status(403).json({ message: "Admin only" });
+  }
+  next();
 }
 
-module.exports = requireRole;   //  phải là export thẳng function
+module.exports = {
+  requireAdmin
+};
+
